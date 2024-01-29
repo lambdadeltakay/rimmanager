@@ -1,5 +1,7 @@
 # RimManager
 
+[![Rust](https://github.com/lambdadeltakay/rimmanager/actions/workflows/build_test.yml/badge.svg)](https://github.com/lambdadeltakay/rimmanager/actions/workflows/build_test.yml)
+
 An open-source rust RimWorld mod manager
 
 Inspired by the wonderful [RimSort](https://github.com/RimSort/RimSort) application
