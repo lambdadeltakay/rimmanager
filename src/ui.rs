@@ -170,51 +170,57 @@ impl RimManager {
                         ui.vertical(|ui| {
                             let mut mod_to_change = None;
 
-                            let my_list = if is_active_list {
+                            let list_to_display = if is_active_list {
                                 &self.active_mod_list
                             } else {
                                 &self.inactive_mod_list
                             };
 
                             let drag_result = dnd(ui, list_name.to_owned() + "_mod_list").show(
-                                my_list.keys(),
-                                |ui, item, handle, _| {
-                                    // If the mod doesn't have a name for some reason use the package id
-
-                                    let displayable_name =
-                                        match &my_list.get(item).unwrap().about_xml.name {
-                                            Some(name) => name,
-                                            None => &item.0,
-                                        };
-
-                                    if searcher.is_empty()
-                                        || displayable_name
-                                            .to_ascii_lowercase()
-                                            .contains(&searcher.to_ascii_lowercase())
-                                    {
-                                        ui.horizontal(|ui| {
+                                list_to_display
+                                    .iter()
+                                    .map(|(id, info)| {
+                                        (
+                                            id,
+                                            // Get the displayable name or default to a string
+                                            match &info.about_xml.name {
+                                                Some(name) => name,
+                                                None => &id.0,
+                                            },
+                                        )
+                                    })
+                                    // Filter out items that don't match the search
+                                    .filter(|(_, displayable_name)| {
+                                        searcher.is_empty()
+                                            || displayable_name
+                                                .to_ascii_lowercase()
+                                                .contains(&searcher.to_ascii_lowercase())
+                                    }),
+                                |ui, (item, displayable_name), handle, _| {
+                                    ui.horizontal(|ui| {
+                                        // Disallow drag and drop when the user is searching
+                                        if searcher.is_empty() {
                                             handle.ui(ui, |ui| {
                                                 ui.label("=");
                                             });
-                                            if ui.button("🔀").clicked() {
-                                                mod_to_change = Some(item.clone());
-                                            }
+                                        }
+                                        if ui.button("🔀").clicked() {
+                                            mod_to_change = Some(item.clone());
+                                        }
 
-                                            if is_active_list
-                                                && self.mod_list_issues.contains_key(item)
-                                            {
-                                                ui.label("🚫");
-                                            }
+                                        if is_active_list && self.mod_list_issues.contains_key(item)
+                                        {
+                                            ui.label("🚫");
+                                        }
 
-                                            if ui.button(displayable_name).clicked() {
-                                                // Chance to cause failure
-                                                mod_to_change = None;
-                                                currently_selected = Some(item.clone());
-                                            }
-                                        });
+                                        if ui.button(displayable_name).clicked() {
+                                            // Chance to cause failure
+                                            mod_to_change = None;
+                                            currently_selected = Some(item.clone());
+                                        }
+                                    });
 
-                                        ui.end_row();
-                                    }
+                                    ui.end_row();
                                 },
                             );
 
@@ -470,6 +476,7 @@ impl eframe::App for RimManager {
             });
         });
 
+        // Open the game picker if the user chooses it
         if let Some(game_installation_picker) = &mut self.game_path_picker_dialog {
             if game_installation_picker.show(ctx).selected() {
                 if let Some(file) = game_installation_picker.path() {
@@ -484,6 +491,7 @@ impl eframe::App for RimManager {
             }
         }
 
+        // Open the steam picker if the user chooses it
         if let Some(steam_prefix_picker) = &mut self.steam_path_picker_dialog {
             if steam_prefix_picker.show(ctx).selected() {
                 if let Some(file) = steam_prefix_picker.path() {
