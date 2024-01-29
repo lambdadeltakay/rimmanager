@@ -1,0 +1,46 @@
+name: Master Release
+
+on:
+    push:
+        tags:
+        - "v*.*.*"
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions-rust-lang/setup-rust-toolchain@v1
+      with:
+        rustflags: ""
+    
+    - name: Build in release mode
+      run: cargo build --release
+
+    - name: Build in release mode
+      run: cargo build --release
+    - name: Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: target/release/rimmanager.exe
+
+  build-ubuntu:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions-rust-lang/setup-rust-toolchain@v1
+      with:
+        rustflags: ""
+    - uses: awalsh128/cache-apt-pkgs-action@latest
+      with:
+        packages: libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev
+        version: 1.0
+
+    - name: Build in release mode
+      run: cargo build --release
+    - name: Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: target/release/rimmanager
