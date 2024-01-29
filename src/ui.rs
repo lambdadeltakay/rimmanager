@@ -154,19 +154,20 @@ impl RimManager {
         };
 
         // Mod manager panel
-        egui::SidePanel::left(list_name.to_owned() + "_mod_list").show(ctx, |ui| {
-            ui.label(list_name.to_owned() + " mods");
+        egui::SidePanel::left(list_name.to_owned() + "_mod_list")
+            .resizable(true)
+            .show(ctx, |ui| {
+                ui.label(list_name.to_owned() + " mods");
 
-            ui.horizontal(|ui| {
-                ui.label("🔎");
-                ui.text_edit_singleline(searcher);
-            });
-            ui.separator();
+                ui.horizontal(|ui| {
+                    ui.label("🔎");
+                    ui.text_edit_singleline(searcher);
+                });
+                ui.separator();
 
-            egui::ScrollArea::vertical()
-                .id_source(list_name.to_owned() + "_mod_scroll_area")
-                .show(ui, |ui| {
-                    egui::Grid::new(list_name.to_owned() + "_mod_grid").show(ui, |ui| {
+                egui::ScrollArea::vertical()
+                    .id_source(list_name.to_owned() + "_mod_scroll_area")
+                    .show(ui, |ui| {
                         ui.vertical(|ui| {
                             let mut mod_to_change = None;
 
@@ -182,7 +183,7 @@ impl RimManager {
                                     .map(|(id, info)| {
                                         (
                                             id,
-                                            // Get the displayable name or default to a string
+                                            // Get the displayable name or default to the id
                                             match &info.about_xml.name {
                                                 Some(name) => name,
                                                 None => &id.0,
@@ -213,7 +214,10 @@ impl RimManager {
                                             ui.label("🚫");
                                         }
 
-                                        if ui.button(displayable_name).clicked() {
+                                        if ui
+                                            .add(egui::Button::new(displayable_name).wrap(true))
+                                            .clicked()
+                                        {
                                             // Chance to cause failure
                                             mod_to_change = None;
                                             currently_selected = Some(item.clone());
@@ -264,8 +268,7 @@ impl RimManager {
                             }
                         });
                     });
-                });
-        });
+            });
 
         currently_selected
     }
