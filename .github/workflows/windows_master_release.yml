@@ -2,8 +2,7 @@ name: Windows Master Release
 
 on:
   push:
-    branches:
-      - main  # Change this to your main branch name
+    branches: [ "master" ]
 
 jobs:
   build:
