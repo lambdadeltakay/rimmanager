@@ -76,57 +76,57 @@ pub struct ModDependencyInfo {
 #[derive(Debug, Deserialize)]
 pub struct ModDependencies {
     #[serde(default, rename = "li")]
-    pub list: Option<Vec<ModDependencyInfo>>,
+    pub list: Vec<ModDependencyInfo>,
 }
 
 #[serde_as]
 #[derive(Debug, Deserialize)]
 pub struct ModDependenciesByVersion {
     #[serde(default, rename = "li")]
-    #[serde_as(as = "Option<HashMap<DisplayFromStr, _>>")]
-    pub map: Option<HashMap<Version, Vec<ModDependencyInfo>>>,
+    #[serde_as(as = "HashMap<DisplayFromStr, _>")]
+    pub map: HashMap<Version, Vec<ModDependencyInfo>>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct LoadAfter {
     #[serde(default, rename = "li")]
-    pub list: Option<HashSet<PackageId>>,
+    pub list: HashSet<PackageId>,
 }
 
 #[serde_as]
 #[derive(Debug, Deserialize)]
 pub struct LoadAfterByVersion {
     #[serde(default, rename = "li")]
-    #[serde_as(as = "Option<HashMap<DisplayFromStr, _>>")]
-    pub map: Option<HashMap<Version, HashSet<PackageId>>>,
+    #[serde_as(as = "HashMap<DisplayFromStr, _>")]
+    pub map: HashMap<Version, HashSet<PackageId>>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct LoadBefore {
     #[serde(default, rename = "li")]
-    pub list: Option<HashSet<PackageId>>,
+    pub list: HashSet<PackageId>,
 }
 
 #[serde_as]
 #[derive(Debug, Deserialize)]
 pub struct LoadBeforeByVersion {
     #[serde(default, rename = "li")]
-    #[serde_as(as = "Option<HashMap<DisplayFromStr, HashSet<_>>>")]
-    pub map: Option<HashMap<Version, HashSet<PackageId>>>,
+    #[serde_as(as = "HashMap<DisplayFromStr, HashSet<_>>")]
+    pub map: HashMap<Version, HashSet<PackageId>>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct IncompatibleWith {
     #[serde(default, rename = "li")]
-    pub list: Option<HashSet<PackageId>>,
+    pub list: HashSet<PackageId>,
 }
 
 #[serde_as]
 #[derive(Debug, Deserialize)]
 pub struct IncompatibleWithByVersion {
     #[serde(default, rename = "li")]
-    #[serde_as(as = "Option<HashMap<DisplayFromStr, HashSet<_>>>")]
-    pub map: Option<HashMap<Version, HashSet<PackageId>>>,
+    #[serde_as(as = "HashMap<DisplayFromStr, HashSet<_>>")]
+    pub map: HashMap<Version, HashSet<PackageId>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -226,123 +226,109 @@ impl ModMetaData {
         }
 
         if let Some(load_before) = &self.load_before {
-            if let Some(load_before) = &load_before.list {
+            data.extend(
+                load_before
+                    .list
+                    .iter()
+                    .cloned()
+                    .map(|id| (id, ModRelation::Before)),
+            );
+        }
+
+        if let Some(load_before_by_version) = &self.load_before_by_version {
+            if let Some(load_before_by_version) = load_before_by_version.map.get(&relevant_version)
+            {
                 data.extend(
-                    load_before
+                    load_before_by_version
                         .iter()
                         .cloned()
                         .map(|id| (id, ModRelation::Before)),
                 );
-            }
-        }
-
-        if let Some(load_before_by_version) = &self.load_before_by_version {
-            if let Some(load_before_by_version) = &load_before_by_version.map {
-                if let Some(load_before_by_version) = load_before_by_version.get(&relevant_version)
-                {
-                    data.extend(
-                        load_before_by_version
-                            .iter()
-                            .cloned()
-                            .map(|id| (id, ModRelation::Before)),
-                    );
-                }
             }
         }
 
         if let Some(force_load_before) = &self.force_load_before {
-            if let Some(force_load_before) = &force_load_before.list {
-                data.extend(
-                    force_load_before
-                        .iter()
-                        .cloned()
-                        .map(|id| (id, ModRelation::Before)),
-                );
-            }
+            data.extend(
+                force_load_before
+                    .list
+                    .iter()
+                    .cloned()
+                    .map(|id| (id, ModRelation::Before)),
+            );
         }
 
         if let Some(load_after) = &self.load_after {
-            if let Some(load_after) = &load_after.list {
+            data.extend(
+                load_after
+                    .list
+                    .iter()
+                    .cloned()
+                    .map(|id| (id, ModRelation::After)),
+            );
+        }
+
+        if let Some(load_after_by_version) = &self.load_after_by_version {
+            if let Some(load_after_by_version) = load_after_by_version.map.get(&relevant_version) {
                 data.extend(
-                    load_after
+                    load_after_by_version
                         .iter()
                         .cloned()
                         .map(|id| (id, ModRelation::After)),
                 );
-            }
-        }
-
-        if let Some(load_after_by_version) = &self.load_after_by_version {
-            if let Some(load_after_by_version) = &load_after_by_version.map {
-                if let Some(load_after_by_version) = load_after_by_version.get(&relevant_version) {
-                    data.extend(
-                        load_after_by_version
-                            .iter()
-                            .cloned()
-                            .map(|id| (id, ModRelation::After)),
-                    );
-                }
             }
         }
 
         if let Some(force_load_after) = &self.force_load_after {
-            if let Some(force_load_after) = &force_load_after.list {
-                data.extend(
-                    force_load_after
-                        .iter()
-                        .cloned()
-                        .map(|id| (id, ModRelation::After)),
-                );
-            }
+            data.extend(
+                force_load_after
+                    .list
+                    .iter()
+                    .cloned()
+                    .map(|id| (id, ModRelation::After)),
+            );
         }
 
         if let Some(mod_dependencies) = &self.mod_dependencies {
-            if let Some(mod_dependencies) = &mod_dependencies.list {
+            data.extend(
+                mod_dependencies
+                    .list
+                    .iter()
+                    .map(|info| (info.package_id.clone(), ModRelation::Dependency)),
+            );
+        }
+
+        if let Some(mod_dependencies_by_version) = &self.mod_dependencies_by_version {
+            if let Some(mod_dependencies_by_version) =
+                &mod_dependencies_by_version.map.get(&relevant_version)
+            {
                 data.extend(
-                    mod_dependencies
+                    mod_dependencies_by_version
                         .iter()
                         .map(|info| (info.package_id.clone(), ModRelation::Dependency)),
                 );
             }
         }
 
-        if let Some(mod_dependencies_by_version) = &self.mod_dependencies_by_version {
-            if let Some(mod_dependencies_by_version) = &mod_dependencies_by_version.map {
-                if let Some(mod_dependencies_by_version) =
-                    &mod_dependencies_by_version.get(&relevant_version)
-                {
-                    data.extend(
-                        mod_dependencies_by_version
-                            .iter()
-                            .map(|info| (info.package_id.clone(), ModRelation::Dependency)),
-                    );
-                }
-            }
+        if let Some(incompatible_with) = &self.incompatible_with {
+            data.extend(
+                incompatible_with
+                    .list
+                    .iter()
+                    .cloned()
+                    .map(|id| (id, ModRelation::Incompatibility)),
+            );
         }
 
-        if let Some(incompatible_with) = &self.incompatible_with {
-            if let Some(incompatible_with) = &incompatible_with.list {
+        if let Some(incompatible_with_by_version) = &self.incompatible_with_by_version {
+            if let Some(incompatible_with_by_version) =
+                incompatible_with_by_version.map.get(&relevant_version)
+            {
                 data.extend(
-                    incompatible_with
+                    incompatible_with_by_version
                         .iter()
                         .cloned()
                         .map(|id| (id, ModRelation::Incompatibility)),
                 );
-            }
-        }
-
-        if let Some(incompatible_with_by_version) = &self.incompatible_with_by_version {
-            if let Some(incompatible_with_by_version) = &incompatible_with_by_version.map {
-                if let Some(incompatible_with_by_version) =
-                    incompatible_with_by_version.get(&relevant_version)
-                {
-                    data.extend(
-                        incompatible_with_by_version
-                            .iter()
-                            .cloned()
-                            .map(|id| (id, ModRelation::Incompatibility)),
-                    );
-                }
             }
         }
 
