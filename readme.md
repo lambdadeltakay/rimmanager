@@ -1,6 +1,6 @@
 # RimManager
 
-[![Rust](https://github.com/lambdadeltakay/rimmanager/actions/workflows/master_release.yml/badge.svg)](https://github.com/lambdadeltakay/rimmanager/actions/workflows/master_release.yml)
+[![Rust](https://github.com/lambdadeltakay/rimmanager/actions/workflows/master_release.yml/badge.svg)](https://github.com/lambdadeltakay/rimmanager/actions/workflows/master_release.yml) <- You can find master branch compiles here
 
 An open-source rust RimWorld mod manager
 
