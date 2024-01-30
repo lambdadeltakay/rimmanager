@@ -18,14 +18,15 @@ jobs:
     - name: Build in release mode
       run: cargo build --release
 
-    - name: Build in release mode
-      run: cargo build --release
+    - name: Rename release file
+      run: mv target/release/rimmanager.exe target/release/windows_x86-64_rimmanager.exe
+
     - name: Release
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       uses: softprops/action-gh-release@v1
       with:
-        files: target/release/rimmanager.exe
+        files: target/release/windows_x86-64_rimmanager.exe
 
   build-ubuntu:
     runs-on: ubuntu-latest
@@ -42,9 +43,13 @@ jobs:
 
     - name: Build in release mode
       run: cargo build --release
+
+    - name: Rename release file
+      run: mv target/release/rimmanager target/release/linux_x86-64_rimmanager
+
     - name: Release
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       uses: softprops/action-gh-release@v1
       with:
-        files: target/release/rimmanager
+        files: target/release/linux_x86-64_rimmanager
