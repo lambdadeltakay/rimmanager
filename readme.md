@@ -1,7 +1,5 @@
 # RimManager
 
-[![Rust](https://github.com/lambdadeltakay/rimmanager/actions/workflows/master_release.yml/badge.svg)](https://github.com/lambdadeltakay/rimmanager/actions/workflows/master_release.yml) <- You can find master branch compiles here
-
 An open-source rust RimWorld mod manager
 
 Inspired by the wonderful [RimSort](https://github.com/RimSort/RimSort) application
@@ -9,6 +7,8 @@ Inspired by the wonderful [RimSort](https://github.com/RimSort/RimSort) applicat
 Please note this program is not finished nor tested extensively and may break at any time for any reason
 
 Please review this entire readme before using this application
+
+[![Rust](https://github.com/lambdadeltakay/rimmanager/actions/workflows/master_release.yml/badge.svg)](https://github.com/lambdadeltakay/rimmanager/actions/workflows/master_release.yml) <- You can find master branch compiles here
 
 ## Features and their implementation status
 
