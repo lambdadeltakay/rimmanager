@@ -37,7 +37,6 @@ Please review this entire readme before using this application
 ## Known issues (PLEASE READ)
 
 - The program assumes you have opened RimWorld at least once. Please open RimWorld at least once before opening this program.
-- On MacOS trying to load or save your mod configuration will crash the program
 - In no way does this program try to watch changes to mod directories. Anything that happens between calls to scan installation will not be caught and may result in catastrophic failure
 - The resulting ModConfig.xml saved is not beautified
 - Mods that do not support your installed version of RimWorld will not be visible

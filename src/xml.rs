@@ -355,32 +355,36 @@ pub fn read_about_xml(mod_location: &Path) -> Result<ModMetaData, Error> {
 }
 
 fn resolve_modconfig_xml_path() -> PathBuf {
-    if cfg!(target_os = "linux") {
-        get_my_home()
-            .unwrap()
-            .unwrap()
-            .join(".config")
-            .join("unity3d")
-            .join("Ludeon Studios")
-            .join("RimWorld by Ludeon Studios")
-            .join("Config")
-    } else if cfg!(target_os = "macos") {
-        // No clue
-        todo!()
-    } else if cfg!(target_os = "windows") {
-        get_my_home()
-            .unwrap()
-            .unwrap()
-            .join("AppData")
-            .join("LocalLow")
-            .join("Ludeon Studios")
-            .join("RimWorld by Ludeon Studios")
-            .join("Config")
-    } else {
-        log::error!("What operating system are you on?");
-        unreachable!()
-    }
-    .join("ModsConfig.xml")
+    #[cfg(target_os = "linux")]
+    let base_path = get_my_home()
+        .unwrap()
+        .unwrap()
+        .join(".config")
+        .join("unity3d")
+        .join("Ludeon Studios")
+        .join("RimWorld by Ludeon Studios")
+        .join("Config");
+
+    #[cfg(target_os = "macos")]
+    let base_path = get_my_home()
+        .unwrap()
+        .unwrap()
+        .join("Library")
+        .join("Application Support")
+        .join("RimWorld")
+        .join("Config");
+
+    #[cfg(target_os = "windows")]
+    let base_path = get_my_home()
+        .unwrap()
+        .unwrap()
+        .join("AppData")
+        .join("LocalLow")
+        .join("Ludeon Studios")
+        .join("RimWorld by Ludeon Studios")
+        .join("Config");
+
+    base_path.join("ModsConfig.xml")
 }
 
 pub fn read_modconfig_xml() -> Result<ModsConfigData, Error> {
