@@ -7,7 +7,7 @@ use std::{
 use crate::{
     does_directory_represent_valid_game_installation, does_directory_represent_valid_steam_prefix,
     parse_game_version,
-    xml::{read_about_xml, read_modconfig_xml, write_modconfig_xml, ModMetaData},
+    xml::{read_about_xml, read_modconfig_xml, write_modconfig_xml, ModMetaData, MODS_TO_ANCHOR},
     PackageId,
 };
 use anyhow::Error;
@@ -99,13 +99,13 @@ impl RimManager {
 
                             if *reverse_setter {
                                 self.active_mod_list.move_index(
-                                    self.active_mod_list.get_index_of(problem_mod_id).unwrap(),
                                     self.active_mod_list.get_index_of(&inspecting_mod).unwrap(),
+                                    self.active_mod_list.get_index_of(problem_mod_id).unwrap(),
                                 );
                             } else {
                                 self.active_mod_list.move_index(
-                                    self.active_mod_list.get_index_of(&inspecting_mod).unwrap(),
                                     self.active_mod_list.get_index_of(problem_mod_id).unwrap(),
+                                    self.active_mod_list.get_index_of(&inspecting_mod).unwrap(),
                                 );
                             }
 
@@ -131,6 +131,13 @@ impl RimManager {
 
                 self.mod_list_issues = summarize_modlist_issues(&self.active_mod_list);
             } else {
+                // If a mod in the list isn't in the first part move it there
+                if index >= MODS_TO_ANCHOR.len() + 3 && MODS_TO_ANCHOR.contains(&inspecting_mod) {
+                    log::info!("Anchoring mod {}", inspecting_mod.0);
+                    self.active_mod_list.move_index(index, 0);
+                    self.mod_list_issues = summarize_modlist_issues(&self.active_mod_list);
+                }
+
                 index += 1;
 
                 if index >= self.active_mod_list.len() {
@@ -535,8 +542,7 @@ impl eframe::App for RimManager {
                         if let Some(actual_path) = actual_path {
                             ui.add(
                                 Image::from_uri(
-                                    "file://".to_string()
-                                        + actual_path.to_string_lossy().as_ref(),
+                                    "file://".to_string() + actual_path.to_string_lossy().as_ref(),
                                 )
                                 .max_height(500.0),
                             );

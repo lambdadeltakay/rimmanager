@@ -8,6 +8,7 @@ use crate::PackageId;
 use anyhow::Error;
 use homedir::get_my_home;
 use indexmap::IndexSet;
+use lazy_static::lazy_static;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_with::formats::CommaSeparator;
@@ -20,6 +21,20 @@ use versions::{Chunks, Version};
 // This folder contains literal XML to rust structures. As such it is not pretty nor fun to use
 // Note that quick-xml produces a xml files that RimWorld nor RimSort can parse if no mods are added
 // So we must force the user to at least include the mod for the base game
+
+// These mods will be forced into the top
+lazy_static! {
+    pub static ref MODS_TO_ANCHOR: HashSet<PackageId> = {
+        HashSet::from([
+            PackageId("ludeon.rimworld".into()),
+            PackageId("ludeon.rimworld.biotech".into()),
+            PackageId("ludeon.rimworld.ideology".into()),
+            PackageId("ludeon.rimworld.royalty".into()),
+            PackageId("brrainz.harmony".into()),
+            PackageId("unlimitedhugs.hugslib".into()),
+        ])
+    };
+}
 
 pub fn deserialize_from_xml<T: DeserializeOwned>(string: &str) -> Result<T, Error> {
     Ok(quick_xml::de::from_str(string)?)
