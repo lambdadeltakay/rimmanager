@@ -364,6 +364,11 @@ impl eframe::App for RimManager {
             "The path you selected does not represent a valid Steam prefix!",
         );
 
+        let unfixable_modlist_modal = alert_box(
+            ctx,
+            "The mod list has dependencies not installed or incompatible mods in the active list. Aborting sorting",
+        );
+
         egui::TopBottomPanel::top("manager").show(ctx, |ui| {
             ui.horizontal(|ui| {
                 egui::Grid::new("button_grid").striped(true).show(ui, |ui| {
@@ -427,7 +432,9 @@ impl eframe::App for RimManager {
                         )
                         .clicked()
                     {
-                        self.resolve_mod_conflicts();
+                        if !self.resolve_mod_conflicts() {
+                            unfixable_modlist_modal.open();
+                        }
                         self.mod_list_issues = summarize_modlist_issues(&self.active_mod_list);
                     }
 
