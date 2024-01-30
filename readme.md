@@ -16,7 +16,7 @@ Please review this entire readme before using this application
 - [x] Basic EGUI-based user interface
 - [x] Mod list validation and writing support
 - [ ] Good EGUI-based user interface
-- [ ] Auto mod list fixing
+- [x] Auto mod list fixing
 - [ ] Optimization and organization
 - [ ] Localization
 - [ ] Download and update mods through the SteamWorks API without the official Steam library, for those who acquired RimWorld outside of Steam.
