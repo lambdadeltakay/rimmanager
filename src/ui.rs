@@ -67,7 +67,11 @@ pub struct RimManager {
 impl RimManager {
     pub fn resolve_mod_conflicts(&mut self) -> bool {
         let mut index = 0;
-        let mut backroll_counter = HashMap::new();
+        // TODO: Test if this is too strict
+        // 100 moves plus the size of both mod lists should never result in a false sorting abort however
+        let mut infinite_loop_checker =
+            100 + self.active_mod_list.len() + self.inactive_mod_list.len();
+        let mut reverse_setter = HashMap::new();
 
         while !self.mod_list_issues.is_empty() {
             let inspecting_mod = self.active_mod_list.get_index(index).unwrap().0.clone();
@@ -80,10 +84,16 @@ impl RimManager {
                         problem_mod_id.0
                     );
 
+                    infinite_loop_checker -= 1;
+                    // Exit early as there is probably a circular dependency
+                    if infinite_loop_checker == 0 {
+                        return false;
+                    }
+
                     match relation {
                         // This ugly thing is to prevent indirect circular dependencies with 3 or more adjacent mods
                         ModRelation::Before | ModRelation::After => {
-                            let reverse_setter = backroll_counter
+                            let reverse_setter = reverse_setter
                                 .entry((problem_mod_id.clone(), inspecting_mod.clone()))
                                 .or_insert(false);
 
@@ -366,7 +376,7 @@ impl eframe::App for RimManager {
 
         let unfixable_modlist_modal = alert_box(
             ctx,
-            "The mod list has dependencies not installed or incompatible mods in the active list. Aborting sorting",
+            "The mod list has dependencies not installed, incompatible mods in the active list, or a direct circular dependency. Aborting sorting",
         );
 
         egui::TopBottomPanel::top("manager").show(ctx, |ui| {

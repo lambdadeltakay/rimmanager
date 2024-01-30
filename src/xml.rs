@@ -9,11 +9,12 @@ use anyhow::Error;
 use homedir::get_my_home;
 use indexmap::IndexSet;
 use serde::de::DeserializeOwned;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_with::formats::CommaSeparator;
 use serde_with::serde_as;
 use serde_with::DisplayFromStr;
 use serde_with::StringWithSeparator;
+use url::Url;
 use versions::{Chunks, Version};
 
 // This folder contains literal XML to rust structures. As such it is not pretty nor fun to use
@@ -30,6 +31,17 @@ pub fn serialize_to_xml<T: Serialize>(data: &T) -> Result<String, Error> {
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>{}",
         quick_xml::se::to_string(data)?
     ))
+}
+
+fn set_invalid_url_to_none<'de, D>(deserializer: D) -> Result<Option<Url>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    match Option::deserialize(deserializer) {
+        Ok(Some(value)) => Ok(Some(value)),
+        Ok(None) => Ok(None),
+        Err(_) => Ok(None),
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -70,7 +82,8 @@ pub struct ModDependencyInfo {
     /// Name for the mod
     pub display_name: String,
     /// Link to the steam workshop for a mod (?)
-    pub steam_workshop_url: Option<String>,
+    #[serde(default, deserialize_with = "set_invalid_url_to_none")]
+    pub steam_workshop_url: Option<Url>,
 }
 
 #[derive(Debug, Deserialize)]
