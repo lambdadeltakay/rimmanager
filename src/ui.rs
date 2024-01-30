@@ -81,7 +81,7 @@ impl RimManager {
         // Normal Mod folder
         scan_paths.push(self.game_path.clone().unwrap().join("Mods"));
         // Base game data files
-        scan_paths.push(self.game_path.clone().unwrap().join("Mods"));
+        scan_paths.push(self.game_path.clone().unwrap().join("Data"));
 
         // Steam mod folder
         if let Some(steam_prefix) = &self.steam_path {
