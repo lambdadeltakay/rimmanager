@@ -535,7 +535,7 @@ impl eframe::App for RimManager {
                         if let Some(actual_path) = actual_path {
                             ui.add(
                                 Image::from_uri(
-                                    "file://{}".to_string()
+                                    "file://".to_string()
                                         + actual_path.to_string_lossy().as_ref(),
                                 )
                                 .max_height(500.0),
