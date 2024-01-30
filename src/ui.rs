@@ -99,13 +99,13 @@ impl RimManager {
 
                             if *reverse_setter {
                                 self.active_mod_list.move_index(
-                                    self.active_mod_list.get_index_of(&inspecting_mod).unwrap(),
                                     self.active_mod_list.get_index_of(problem_mod_id).unwrap(),
+                                    self.active_mod_list.get_index_of(&inspecting_mod).unwrap(),
                                 );
                             } else {
                                 self.active_mod_list.move_index(
-                                    self.active_mod_list.get_index_of(problem_mod_id).unwrap(),
                                     self.active_mod_list.get_index_of(&inspecting_mod).unwrap(),
+                                    self.active_mod_list.get_index_of(problem_mod_id).unwrap(),
                                 );
                             }
 
@@ -189,25 +189,26 @@ impl RimManager {
                         mod_folder.display()
                     );
 
-                    // Load the About.xml
-                    let about_file_xml = read_about_xml(&mod_folder)?;
+                    if let Ok(about_file_xml) = read_about_xml(&mod_folder) {
+                        if !about_file_xml.does_mod_support_this_version(game_version.clone()) {
+                            log::info!("Skipping mod");
+                            continue;
+                        }
 
-                    if !about_file_xml.does_mod_support_this_version(game_version.clone()) {
-                        log::info!("Skipping mod");
-                        continue;
+                        let dependency_info = about_file_xml
+                            .get_dependency_information_for_version(game_version.clone());
+
+                        self.inactive_mod_list.insert(
+                            about_file_xml.package_id.clone(),
+                            ModInfo {
+                                path: mod_folder,
+                                about_xml: about_file_xml,
+                                dependency_info,
+                            },
+                        );
+                    } else {
+                        log::warn!("Can't parse this mods About.xml!");
                     }
-
-                    let dependency_info =
-                        about_file_xml.get_dependency_information_for_version(game_version.clone());
-
-                    self.inactive_mod_list.insert(
-                        about_file_xml.package_id.clone(),
-                        ModInfo {
-                            path: mod_folder,
-                            about_xml: about_file_xml,
-                            dependency_info,
-                        },
-                    );
                 }
             }
         }
@@ -281,7 +282,8 @@ impl RimManager {
                                                 ui.label("=");
                                             });
                                         }
-                                        if ui.button("🔀").clicked() {
+
+                                        if ui.button("↔").clicked() {
                                             mod_to_change = Some(item.clone());
                                         }
 
@@ -532,11 +534,11 @@ impl eframe::App for RimManager {
                         // There is really no nice looking way to do this since RimWorld mods have all different images sizes
                         if let Some(actual_path) = actual_path {
                             ui.add(
-                                Image::from_uri(format!(
-                                    "file://{}",
-                                    actual_path.to_string_lossy()
-                                ))
-                                .max_height(300.0),
+                                Image::from_uri(
+                                    "file://{}".to_string()
+                                        + actual_path.to_string_lossy().as_ref(),
+                                )
+                                .max_height(500.0),
                             );
                         }
 
