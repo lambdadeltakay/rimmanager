@@ -3,7 +3,7 @@ mod xml;
 
 use anyhow::Error;
 use serde::{Deserialize, Deserializer, Serialize};
-use std::{path::Path, str::FromStr};
+use std::{fs, path::Path, str::FromStr};
 use ui::RimManager;
 use versions::Version;
 
@@ -48,6 +48,40 @@ fn main() {
         options,
         Box::new(|cc| {
             egui_extras::install_image_loaders(&cc.egui_ctx);
+
+            let mut font_db = fontdb::Database::new();
+            font_db.load_system_fonts();
+
+            let query = fontdb::Query {
+                families: &[fontdb::Family::SansSerif],
+                ..fontdb::Query::default()
+            };
+
+            // FIXME: Note that I can't get this to work on Linux
+            if let Some(id) = font_db.query(&query) {
+                let (src, _) = font_db.face_source(id).unwrap();
+
+                if let fontdb::Source::File(path) = &src {
+                    let mut fonts = egui::FontDefinitions::default();
+
+                    let font_data = fs::read(path).unwrap();
+                    let font_system_sans_serif = "System Sans Serif";
+
+                    fonts.font_data.insert(
+                        font_system_sans_serif.to_owned(),
+                        egui::FontData::from_owned(font_data),
+                    );
+
+                    fonts
+                        .families
+                        .entry(egui::FontFamily::Proportional)
+                        .or_default()
+                        .insert(0, font_system_sans_serif.to_owned());
+                    
+                    cc.egui_ctx.set_fonts(fonts);
+                }
+            }
+
             Box::<RimManager>::default()
         }),
     )
