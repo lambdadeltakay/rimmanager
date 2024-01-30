@@ -65,6 +65,72 @@ pub struct RimManager {
 }
 
 impl RimManager {
+    pub fn resolve_mod_conflicts(&mut self) -> bool {
+        let mut index = 0;
+        let mut backroll_counter = HashMap::new();
+
+        while !self.mod_list_issues.is_empty() {
+            let inspecting_mod = self.active_mod_list.get_index(index).unwrap().0.clone();
+
+            if let Some(issues) = self.mod_list_issues.get(&inspecting_mod) {
+                for (problem_mod_id, relation) in issues {
+                    log::info!(
+                        "Solving conflict for mod: {} and {}",
+                        inspecting_mod.0,
+                        problem_mod_id.0
+                    );
+
+                    match relation {
+                        ModRelation::Before | ModRelation::After => {
+                            let backroll_counter = backroll_counter
+                                .entry((problem_mod_id.clone(), inspecting_mod.clone()))
+                                .or_insert(false);
+
+                            if *backroll_counter {
+                                self.active_mod_list.move_index(
+                                    self.active_mod_list.get_index_of(&inspecting_mod).unwrap(),
+                                    self.active_mod_list.get_index_of(problem_mod_id).unwrap(),
+                                );
+                            } else {
+                                self.active_mod_list.move_index(
+                                    self.active_mod_list.get_index_of(problem_mod_id).unwrap(),
+                                    self.active_mod_list.get_index_of(&inspecting_mod).unwrap(),
+                                );
+                            }
+
+                            *backroll_counter = !*backroll_counter;
+
+                            break;
+                        }
+                        ModRelation::Dependency => {
+                            if self.inactive_mod_list.contains_key(problem_mod_id) {
+                                self.active_mod_list.insert(
+                                    problem_mod_id.clone(),
+                                    self.inactive_mod_list.shift_remove(problem_mod_id).unwrap(),
+                                );
+                            } else {
+                                return false;
+                            }
+                        }
+                        ModRelation::Incompatibility => {
+                            return false;
+                        }
+                    }
+                }
+
+                self.mod_list_issues = summarize_modlist_issues(&self.active_mod_list);
+            } else {
+                index += 1;
+
+                if index >= self.active_mod_list.len() {
+                    index = 0;
+                }
+            }
+        }
+
+        true
+    }
+
     pub fn refresh_mod_metadata(&mut self) -> Result<(), Error> {
         self.active_mod_list.clear();
         self.inactive_mod_list.clear();
@@ -352,6 +418,17 @@ impl eframe::App for RimManager {
 
                             write_modconfig_xml(&mod_config_data).unwrap();
                         }
+                    }
+
+                    if ui
+                        .add_enabled(
+                            !self.mod_list_issues.is_empty(),
+                            Button::new("Fix mod ordering"),
+                        )
+                        .clicked()
+                    {
+                        self.resolve_mod_conflicts();
+                        self.mod_list_issues = summarize_modlist_issues(&self.active_mod_list);
                     }
 
                     ui.end_row();
