@@ -81,12 +81,13 @@ impl RimManager {
                     );
 
                     match relation {
+                        // This ugly thing is to prevent indirect circular dependencies with 3 or more adjacent mods
                         ModRelation::Before | ModRelation::After => {
-                            let backroll_counter = backroll_counter
+                            let reverse_setter = backroll_counter
                                 .entry((problem_mod_id.clone(), inspecting_mod.clone()))
                                 .or_insert(false);
 
-                            if *backroll_counter {
+                            if *reverse_setter {
                                 self.active_mod_list.move_index(
                                     self.active_mod_list.get_index_of(&inspecting_mod).unwrap(),
                                     self.active_mod_list.get_index_of(problem_mod_id).unwrap(),
@@ -98,7 +99,7 @@ impl RimManager {
                                 );
                             }
 
-                            *backroll_counter = !*backroll_counter;
+                            *reverse_setter = !*reverse_setter;
 
                             break;
                         }
@@ -144,11 +145,10 @@ impl RimManager {
 
         let mut scan_paths = Vec::new();
 
-        // Normal Mod folder
-        scan_paths.push(self.game_path.clone().unwrap().join("Mods"));
         // Base game data files
         scan_paths.push(self.game_path.clone().unwrap().join("Data"));
-
+        // Normal Mod folder
+        scan_paths.push(self.game_path.clone().unwrap().join("Mods"));
         // Steam mod folder
         if let Some(steam_prefix) = &self.steam_path {
             let path = steam_prefix
@@ -467,7 +467,7 @@ impl eframe::App for RimManager {
                         let mut folder_picker =
                             FileDialog::select_folder(Some(get_my_home().unwrap().unwrap()))
                                 .show_new_folder(false)
-                                .title("Pick a valid Steam path");
+                                .title("Pick a valid Steam prefix!");
                         folder_picker.open();
                         self.steam_path_picker_dialog = Some(folder_picker);
                     }

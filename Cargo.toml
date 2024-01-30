@@ -17,7 +17,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_with = "3.5"
 log = "0.4"
 env_logger = "0.11"
-indexmap = { version = "2.1", features = ["serde"] }
+indexmap = { version = "2.2", features = ["serde"] }
 home = "0.5"
 anyhow = "1.0"
 url = { version = "2.5", features = ["serde"] }
@@ -25,3 +25,4 @@ versions = "6.1"
 itertools = "0.12"
 homedir = "0.2"
 fontdb = "0.16"
+toml = "0.8"

@@ -340,11 +340,6 @@ pub fn read_about_xml(mod_location: &Path) -> Result<ModMetaData, Error> {
     let mut about_file_location = mod_location.to_path_buf();
     about_file_location.extend(["About", "About.xml"]);
 
-    if !about_file_location.is_file() {
-        // TODO: Error out about a invalid About.xml
-        panic!()
-    }
-
     let about_file_data = fs::read(about_file_location)?;
     // I'm gonna take the assumption all RimWorld xml files are in utf8 without checking because so far that seems to be the case
     // TODO: Check if this is always true
