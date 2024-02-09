@@ -1,23 +1,12 @@
+mod managment;
 mod ui;
 mod xml;
 
 use anyhow::Error;
-use serde::{Deserialize, Deserializer, Serialize};
+
 use std::{fs, path::Path, str::FromStr};
 use ui::RimManager;
 use versions::Version;
-
-/// Forces the PackageIds to be lowercase
-fn deserialize_package_id<'de, D>(deserializer: D) -> Result<String, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let original_string: String = Deserialize::deserialize(deserializer)?;
-    Ok(original_string.to_lowercase())
-}
-
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Hash, Clone, PartialOrd, Ord)]
-pub struct PackageId(#[serde(deserialize_with = "deserialize_package_id")] pub String);
 
 pub fn parse_game_version(raw: &str) -> Result<Version, Error> {
     let version = raw.split(' ').next().unwrap();
@@ -77,7 +66,7 @@ fn main() {
                         .entry(egui::FontFamily::Proportional)
                         .or_default()
                         .insert(0, font_system_sans_serif.to_owned());
-                    
+
                     cc.egui_ctx.set_fonts(fonts);
                 }
             }

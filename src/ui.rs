@@ -1,14 +1,10 @@
-use std::{
-    collections::{HashMap, HashSet},
-    fs,
-    path::PathBuf,
-};
+use std::{collections::HashSet, fs, path::PathBuf};
 
 use crate::{
     does_directory_represent_valid_game_installation, does_directory_represent_valid_steam_prefix,
+    managment::{CondensedModMetadata, ModList, ModListIssueCache, ModRuleDb, PackageId},
     parse_game_version,
-    xml::{read_about_xml, read_modconfig_xml, write_modconfig_xml, ModMetaData, MODS_TO_ANCHOR},
-    PackageId,
+    xml::{read_about_xml, read_modconfig_xml, write_modconfig_xml},
 };
 use anyhow::Error;
 use egui::{Button, Image};
@@ -16,28 +12,11 @@ use egui_dnd::dnd;
 use egui_file::FileDialog;
 use egui_modal::Modal;
 use homedir::get_my_home;
-use indexmap::IndexMap;
 
 // TODO: Reorganize this and remove the code duplication
-// TODO: Detach UI from mod managment
-
-#[derive(Debug, Clone)]
-pub enum ModRelation {
-    Before,
-    After,
-    Dependency,
-    Incompatibility,
-}
-
 // FIXME: A lot of redundant data being held here!!
 // TODO: Extract enough data that we don't carry about the About.xml for every mod. We are trying to save every cpu cycle and byte here
 // TODO: We might add loading screens and stuff althrough its not exactly needed considering how fast our code is
-
-pub struct ModInfo {
-    pub path: PathBuf,
-    pub about_xml: ModMetaData,
-    pub dependency_info: HashMap<PackageId, ModRelation>,
-}
 
 #[derive(Default)]
 pub struct RimManager {
@@ -54,104 +33,23 @@ pub struct RimManager {
     /// Mod being displayed in the sidebar
     pub currently_selected_mod: Option<PackageId>,
     /// List of mods that can be written or read into
-    pub active_mod_list: IndexMap<PackageId, ModInfo>,
-    pub inactive_mod_list: IndexMap<PackageId, ModInfo>,
+    pub active_mod_list: ModList,
+    pub inactive_mod_list: ModList,
     /// Search bar for inactive mods
     pub inactive_search: String,
     /// Search bar for active mods
     pub active_search: String,
-    /// Cached list of issues for the user to resolve for each mod
-    pub mod_list_issues: HashMap<PackageId, HashMap<PackageId, ModRelation>>,
+    /// Rule stuff
+    pub mod_rules: ModRuleDb,
+    pub mod_list_issue_cache: ModListIssueCache,
 }
 
 impl RimManager {
-    pub fn resolve_mod_conflicts(&mut self) -> bool {
-        let mut index = 0;
-        // TODO: Test if this is too strict
-        // 100 moves plus the size of both mod lists should never result in a false sorting abort however
-        let mut infinite_loop_checker =
-            100 + self.active_mod_list.len() + self.inactive_mod_list.len();
-        let mut reverse_setter = HashMap::new();
+    pub fn refresh_metadata(&mut self) -> Result<(), Error> {
+        self.active_mod_list.0.clear();
+        self.inactive_mod_list.0.clear();
+        self.mod_list_issue_cache.0.clear();
 
-        while !self.mod_list_issues.is_empty() {
-            let inspecting_mod = self.active_mod_list.get_index(index).unwrap().0.clone();
-
-            if let Some(issues) = self.mod_list_issues.get(&inspecting_mod) {
-                for (problem_mod_id, relation) in issues {
-                    log::info!(
-                        "Solving conflict for mod: {} and {}",
-                        inspecting_mod.0,
-                        problem_mod_id.0
-                    );
-
-                    infinite_loop_checker -= 1;
-                    // Exit early as there is probably a circular dependency
-                    if infinite_loop_checker == 0 {
-                        return false;
-                    }
-
-                    match relation {
-                        // This ugly thing is to prevent indirect circular dependencies with 3 or more adjacent mods
-                        ModRelation::Before | ModRelation::After => {
-                            let reverse_setter = reverse_setter
-                                .entry((problem_mod_id.clone(), inspecting_mod.clone()))
-                                .or_insert(false);
-
-                            if *reverse_setter {
-                                self.active_mod_list.move_index(
-                                    self.active_mod_list.get_index_of(&inspecting_mod).unwrap(),
-                                    self.active_mod_list.get_index_of(problem_mod_id).unwrap(),
-                                );
-                            } else {
-                                self.active_mod_list.move_index(
-                                    self.active_mod_list.get_index_of(problem_mod_id).unwrap(),
-                                    self.active_mod_list.get_index_of(&inspecting_mod).unwrap(),
-                                );
-                            }
-
-                            *reverse_setter = !*reverse_setter;
-
-                            break;
-                        }
-                        ModRelation::Dependency => {
-                            if self.inactive_mod_list.contains_key(problem_mod_id) {
-                                self.active_mod_list.insert(
-                                    problem_mod_id.clone(),
-                                    self.inactive_mod_list.shift_remove(problem_mod_id).unwrap(),
-                                );
-                            } else {
-                                return false;
-                            }
-                        }
-                        ModRelation::Incompatibility => {
-                            return false;
-                        }
-                    }
-                }
-
-                self.mod_list_issues = summarize_modlist_issues(&self.active_mod_list);
-            } else {
-                // If a mod in the list isn't in the first part move it there
-                if index >= MODS_TO_ANCHOR.len() + 3 && MODS_TO_ANCHOR.contains(&inspecting_mod) {
-                    log::info!("Anchoring mod {}", inspecting_mod.0);
-                    self.active_mod_list.move_index(index, 0);
-                    self.mod_list_issues = summarize_modlist_issues(&self.active_mod_list);
-                }
-
-                index += 1;
-
-                if index >= self.active_mod_list.len() {
-                    index = 0;
-                }
-            }
-        }
-
-        true
-    }
-
-    pub fn refresh_mod_metadata(&mut self) -> Result<(), Error> {
-        self.active_mod_list.clear();
-        self.inactive_mod_list.clear();
         self.currently_selected_mod = None;
 
         // Grab the game version
@@ -202,15 +100,19 @@ impl RimManager {
                             continue;
                         }
 
-                        let dependency_info = about_file_xml
-                            .get_dependency_information_for_version(game_version.clone());
+                        about_file_xml.load_dependency_information_for_version(
+                            game_version.clone(),
+                            &mut self.mod_rules,
+                        );
 
-                        self.inactive_mod_list.insert(
+                        self.inactive_mod_list.0.insert(
                             about_file_xml.package_id.clone(),
-                            ModInfo {
-                                path: mod_folder,
-                                about_xml: about_file_xml,
-                                dependency_info,
+                            CondensedModMetadata {
+                                displayable_name: about_file_xml
+                                    .name
+                                    .unwrap_or(about_file_xml.package_id.0.to_string()),
+                                location: mod_folder,
+                                description: about_file_xml.description,
                             },
                         );
                     } else {
@@ -263,16 +165,10 @@ impl RimManager {
 
                             let drag_result = dnd(ui, list_name.to_owned() + "_mod_list").show(
                                 list_to_display
+                                    .0
                                     .iter()
-                                    .map(|(id, info)| {
-                                        (
-                                            id,
-                                            // Get the displayable name or default to the id
-                                            match &info.about_xml.name {
-                                                Some(name) => name,
-                                                None => &id.0,
-                                            },
-                                        )
+                                    .map(|(package_id, package_metadeta)| {
+                                        (package_id, &package_metadeta.displayable_name)
                                     })
                                     // Filter out items that don't match the search
                                     .filter(|(_, displayable_name)| {
@@ -294,7 +190,8 @@ impl RimManager {
                                             mod_to_change = Some(item.clone());
                                         }
 
-                                        if is_active_list && self.mod_list_issues.contains_key(item)
+                                        if is_active_list
+                                            && self.mod_list_issue_cache.0.contains_key(item)
                                         {
                                             ui.label("🚫");
                                         }
@@ -323,16 +220,19 @@ impl RimManager {
                                 // This looks strange and hacky but it creates a more natural dragging operation
                                 match drag_result.from.cmp(&drag_result.to) {
                                     std::cmp::Ordering::Less => {
-                                        my_list.move_index(drag_result.from, drag_result.to - 1)
+                                        my_list.0.move_index(drag_result.from, drag_result.to - 1)
                                     }
                                     std::cmp::Ordering::Equal => (),
                                     std::cmp::Ordering::Greater => {
-                                        my_list.move_index(drag_result.from, drag_result.to)
+                                        my_list.0.move_index(drag_result.from, drag_result.to)
                                     }
                                 }
 
                                 if is_active_list {
-                                    self.mod_list_issues = summarize_modlist_issues(my_list);
+                                    self.active_mod_list.find_list_issues(
+                                        &self.mod_rules,
+                                        &mut self.mod_list_issue_cache,
+                                    );
                                 }
                             }
 
@@ -343,13 +243,15 @@ impl RimManager {
                                     (&mut self.active_mod_list, &mut self.inactive_mod_list)
                                 };
 
-                                other_list.insert(
+                                other_list.0.insert(
                                     mod_to_change.clone(),
-                                    my_list.shift_remove(&mod_to_change).unwrap(),
+                                    my_list.0.shift_remove(&mod_to_change).unwrap(),
                                 );
 
-                                self.mod_list_issues =
-                                    summarize_modlist_issues(&self.active_mod_list);
+                                self.active_mod_list.find_list_issues(
+                                    &self.mod_rules,
+                                    &mut self.mod_list_issue_cache,
+                                );
                             }
                         });
                     });
@@ -396,7 +298,7 @@ impl eframe::App for RimManager {
                         .add_enabled(self.game_path.is_some(), Button::new("Scan installation"))
                         .clicked()
                     {
-                        self.refresh_mod_metadata().unwrap();
+                        self.refresh_metadata().unwrap();
                     }
 
                     ui.end_row();
@@ -406,20 +308,21 @@ impl eframe::App for RimManager {
                         .clicked()
                     {
                         let mod_ordering = read_modconfig_xml().unwrap();
-                        self.refresh_mod_metadata().unwrap();
+                        self.refresh_metadata().unwrap();
                         // Active mod list will be empty by here
 
                         // Check for mods in our known mods and add them
                         for mod_id in &mod_ordering.active_mods.list {
-                            if self.inactive_mod_list.contains_key(mod_id) {
-                                self.active_mod_list.insert(
+                            if self.inactive_mod_list.0.contains_key(mod_id) {
+                                self.active_mod_list.0.insert(
                                     mod_id.clone(),
-                                    self.inactive_mod_list.shift_remove(mod_id).unwrap(),
+                                    self.inactive_mod_list.0.shift_remove(mod_id).unwrap(),
                                 );
                             }
                         }
 
-                        self.mod_list_issues = summarize_modlist_issues(&self.active_mod_list);
+                        self.active_mod_list
+                            .find_list_issues(&self.mod_rules, &mut self.mod_list_issue_cache);
                     }
 
                     ui.end_row();
@@ -430,15 +333,16 @@ impl eframe::App for RimManager {
                     {
                         if !self
                             .active_mod_list
+                            .0
                             .contains_key(&PackageId("ludeon.rimworld".to_owned()))
                         {
                             missing_core_on_modlist_modal.open();
-                        } else if !self.mod_list_issues.is_empty() {
+                        } else if !self.mod_list_issue_cache.0.is_empty() {
                             mod_list_unresolved_issues_modal.open();
                         } else {
                             let mut mod_config_data = read_modconfig_xml().unwrap();
                             mod_config_data.active_mods.list =
-                                self.active_mod_list.keys().cloned().collect();
+                                self.active_mod_list.0.keys().cloned().collect();
 
                             write_modconfig_xml(&mod_config_data).unwrap();
                         }
@@ -446,15 +350,17 @@ impl eframe::App for RimManager {
 
                     if ui
                         .add_enabled(
-                            !self.mod_list_issues.is_empty(),
+                            !self.mod_list_issue_cache.0.is_empty(),
                             Button::new("Fix mod ordering"),
                         )
                         .clicked()
+                        && !self.active_mod_list.autofix(
+                            &self.mod_rules,
+                            &mut self.inactive_mod_list,
+                            &mut self.mod_list_issue_cache,
+                        )
                     {
-                        if !self.resolve_mod_conflicts() {
-                            unfixable_modlist_modal.open();
-                        }
-                        self.mod_list_issues = summarize_modlist_issues(&self.active_mod_list);
+                        unfixable_modlist_modal.open();
                     }
 
                     ui.end_row();
@@ -519,20 +425,21 @@ impl eframe::App for RimManager {
             egui::ScrollArea::vertical().show(ui, |ui| {
                 ui.vertical(|ui| {
                     if let Some(selected_mod) = &self.currently_selected_mod {
-                        ui.label(selected_mod.0.clone());
+                        ui.label(selected_mod.0.as_str());
 
-                        let mod_info = if let Some(path) = self.active_mod_list.get(selected_mod) {
+                        let mod_info = if let Some(path) = self.active_mod_list.0.get(selected_mod)
+                        {
                             path
-                        } else if let Some(path) = self.inactive_mod_list.get(selected_mod) {
+                        } else if let Some(path) = self.inactive_mod_list.0.get(selected_mod) {
                             path
                         } else {
                             unreachable!();
                         };
 
                         // Work around for windows users not casing files correctly
-                        let image_path = mod_info.path.join("About").join("Preview.png");
+                        let image_path = mod_info.location.join("About").join("Preview.png");
                         let other_possible_image_path =
-                            mod_info.path.join("About").join("preview.png");
+                            mod_info.location.join("About").join("preview.png");
 
                         let actual_path = [image_path, other_possible_image_path]
                             .into_iter()
@@ -556,7 +463,9 @@ impl eframe::App for RimManager {
                             .striped(true)
                             .show(ui, |ui| {
                                 if let Some(problem_mod) = &self.currently_selected_mod {
-                                    if let Some(problems) = self.mod_list_issues.get(problem_mod) {
+                                    if let Some(problems) =
+                                        self.mod_list_issue_cache.0.get(problem_mod)
+                                    {
                                         for (problem_id, problem_relation) in problems {
                                             ui.label(problem_id.clone().0);
                                             ui.separator();
@@ -569,13 +478,10 @@ impl eframe::App for RimManager {
 
                         ui.separator();
 
-                        if let Some(description) = &mod_info.about_xml.description {
-                            ui.label("Description");
-
-                            // Mods use a special steam specific markdown
-                            // I'm not writing a parser for that lmaooo
-                            ui.label(description);
-                        }
+                        ui.label("Description");
+                        // Mods use a special steam specific markdown
+                        // I'm not writing a parser for that lmaooo
+                        ui.label(&mod_info.description);
                     }
                 });
             });
@@ -588,7 +494,7 @@ impl eframe::App for RimManager {
                     if does_directory_represent_valid_game_installation(file) {
                         self.game_path = Some(file.to_path_buf());
                         self.game_path_picker_dialog = None;
-                        self.refresh_mod_metadata().unwrap();
+                        self.refresh_metadata().unwrap();
                     } else {
                         invalid_game_path_modal.open();
                     }
@@ -603,7 +509,7 @@ impl eframe::App for RimManager {
                     if does_directory_represent_valid_steam_prefix(file) {
                         self.steam_path = Some(file.to_path_buf());
                         self.steam_path_picker_dialog = None;
-                        self.refresh_mod_metadata().unwrap();
+                        self.refresh_metadata().unwrap();
                     } else {
                         invalid_steam_path_modal.open();
                     }
@@ -611,78 +517,6 @@ impl eframe::App for RimManager {
             }
         }
     }
-}
-
-// TODO: This entire function runs on the brave assumption that Mods do not specify more than one relation for another mod
-/// Please call this as little as possible, its very expensive
-pub fn summarize_modlist_issues(
-    modlist: &IndexMap<PackageId, ModInfo>,
-) -> HashMap<PackageId, HashMap<PackageId, ModRelation>> {
-    let mut data: HashMap<_, HashMap<PackageId, ModRelation>> = HashMap::new();
-
-    for (inspecting_mod_index, (inspecting_mod_id, inspecting_mod_info)) in
-        modlist.iter().enumerate()
-    {
-        // First we will add all dependency ones to the issues
-        for (other_mod_id, other_mod_info) in &inspecting_mod_info.dependency_info {
-            if matches!(other_mod_info, ModRelation::Dependency) {
-                data.entry(inspecting_mod_id.clone())
-                    .or_default()
-                    .insert(other_mod_id.clone(), other_mod_info.clone());
-            }
-        }
-
-        // Then we will filter through
-        for (other_mod_id, other_mod_info) in inspecting_mod_info
-            .dependency_info
-            .iter()
-            .filter(|(mod_id, _)| modlist.contains_key(*mod_id))
-        {
-            let other_mod_position = modlist.get_index_of(other_mod_id).unwrap();
-
-            match other_mod_info {
-                ModRelation::Before => {
-                    if inspecting_mod_index > other_mod_position {
-                        data.entry(inspecting_mod_id.clone())
-                            .or_default()
-                            .insert(other_mod_id.clone(), other_mod_info.clone());
-                    }
-                }
-                ModRelation::After => {
-                    if inspecting_mod_index < other_mod_position {
-                        data.entry(inspecting_mod_id.clone())
-                            .or_default()
-                            .insert(other_mod_id.clone(), other_mod_info.clone());
-                    }
-                }
-                // This actually removes ones if its found
-                // Then it does the same check as After
-                ModRelation::Dependency => {
-                    data.entry(inspecting_mod_id.clone())
-                        .or_default()
-                        .remove(other_mod_id);
-
-                    if inspecting_mod_index < other_mod_position {
-                        data.entry(inspecting_mod_id.clone())
-                            .or_default()
-                            .insert(other_mod_id.clone(), ModRelation::After);
-                    }
-                }
-                ModRelation::Incompatibility => {
-                    data.entry(inspecting_mod_id.clone())
-                        .or_default()
-                        .insert(other_mod_id.clone(), other_mod_info.clone());
-                }
-            }
-        }
-
-        // Remove entries that otherwise have nothing in them
-        if data.contains_key(inspecting_mod_id) && data.get(inspecting_mod_id).unwrap().is_empty() {
-            data.remove(inspecting_mod_id);
-        }
-    }
-
-    data
 }
 
 pub fn alert_box(ctx: &egui::Context, body: &str) -> Modal {

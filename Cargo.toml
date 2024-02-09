@@ -14,7 +14,7 @@ egui_extras = { version = "0.26", features = ["file", "image"] }
 image = { version = "0.24", features = ["png"] }
 quick-xml = { version = "0.31", features = ["serialize"] }
 serde = { version = "1.0", features = ["derive"] }
-serde_with = "3.5"
+serde_with = "3.6"
 log = "0.4"
 env_logger = "0.11"
 indexmap = { version = "2.2", features = ["serde"] }
@@ -26,4 +26,3 @@ itertools = "0.12"
 homedir = "0.2"
 fontdb = "0.16"
 toml = "0.8"
-lazy_static = "1.4"
