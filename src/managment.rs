@@ -2,6 +2,8 @@ use indexmap::IndexMap;
 use serde::{Deserialize, Deserializer, Serialize};
 use std::{
     collections::HashMap,
+    fs,
+    hash::Hash,
     path::{Path, PathBuf},
 };
 
@@ -136,76 +138,78 @@ impl ModList {
     pub fn find_list_issues(&self, db: &ModRuleDb, issue_cache: &mut ModListIssueCache) {
         issue_cache.0.clear();
 
-        // Iter over the dbs
-        // Iter over the rulesets in each db but only the ones in the list
-        for (package_id, rule_entries, package_position) in
-            db.0.iter().filter_map(|(package_id, rule_entries)| {
-                self.0
-                    .get_index_of(package_id)
-                    .map(|pos| (package_id, rule_entries, pos))
-            })
-        {
-            // Add all the dependencies as problems and we will remove them later when the time comes
-            issue_cache.0.entry(package_id.clone()).or_default().extend(
-                rule_entries.rules.iter().filter_map(|(package_id, rule)| {
-                    if matches!(rule, ModRelation::Dependency) {
-                        return Some((package_id.clone(), ModRelation::Dependency));
-                    }
-
-                    None
-                }),
-            );
-
-            for (problem_package_id, relation, problem_package_position) in rule_entries
-                .rules
-                .iter()
-                .filter_map(|(package_id, rule_entries)| {
+        for (_, db) in db.0.iter() {
+            // Iter over the dbs
+            // Iter over the rulesets in each db but only the ones in the list
+            for (package_id, rule_entries, package_position) in
+                db.iter().filter_map(|(package_id, rule_entries)| {
                     self.0
                         .get_index_of(package_id)
                         .map(|pos| (package_id, rule_entries, pos))
                 })
             {
-                match relation {
-                    ModRelation::Before => {
-                        if package_position > problem_package_position {
-                            issue_cache
-                                .0
-                                .entry(package_id.clone())
-                                .or_default()
-                                .insert(problem_package_id.clone(), relation.clone());
+                // Add all the dependencies as problems and we will remove them later when the time comes
+                issue_cache.0.entry(package_id.clone()).or_default().extend(
+                    rule_entries.rules.iter().filter_map(|(package_id, rule)| {
+                        if matches!(rule, ModRelation::Dependency) {
+                            return Some((package_id.clone(), ModRelation::Dependency));
                         }
-                    }
-                    ModRelation::After => {
-                        if package_position < problem_package_position {
-                            issue_cache
-                                .0
-                                .entry(package_id.clone())
-                                .or_default()
-                                .insert(problem_package_id.clone(), relation.clone());
-                        }
-                    }
-                    ModRelation::Dependency => {
-                        // Remove the dependecy entry and do the after check
-                        issue_cache
-                            .0
-                            .entry(package_id.clone())
-                            .or_default()
-                            .remove(problem_package_id);
 
-                        if package_position < problem_package_position {
+                        None
+                    }),
+                );
+
+                for (problem_package_id, relation, problem_package_position) in rule_entries
+                    .rules
+                    .iter()
+                    .filter_map(|(package_id, rule_entries)| {
+                        self.0
+                            .get_index_of(package_id)
+                            .map(|pos| (package_id, rule_entries, pos))
+                    })
+                {
+                    match relation {
+                        ModRelation::Before => {
+                            if package_position > problem_package_position {
+                                issue_cache
+                                    .0
+                                    .entry(package_id.clone())
+                                    .or_default()
+                                    .insert(problem_package_id.clone(), relation.clone());
+                            }
+                        }
+                        ModRelation::After => {
+                            if package_position < problem_package_position {
+                                issue_cache
+                                    .0
+                                    .entry(package_id.clone())
+                                    .or_default()
+                                    .insert(problem_package_id.clone(), relation.clone());
+                            }
+                        }
+                        ModRelation::Dependency => {
+                            // Remove the dependecy entry and do the after check
                             issue_cache
                                 .0
                                 .entry(package_id.clone())
                                 .or_default()
-                                .insert(problem_package_id.clone(), ModRelation::After);
+                                .remove(problem_package_id);
+
+                            if package_position < problem_package_position {
+                                issue_cache
+                                    .0
+                                    .entry(package_id.clone())
+                                    .or_default()
+                                    .insert(problem_package_id.clone(), ModRelation::After);
+                            }
                         }
-                    }
-                    ModRelation::Incompatibility => {
-                        issue_cache
-                            .0
-                            .entry(package_id.clone())
-                            .or_default()
-                            .insert(problem_package_id.clone(), relation.clone());
+                        ModRelation::Incompatibility => {
+                            issue_cache
+                                .0
+                                .entry(package_id.clone())
+                                .or_default()
+                                .insert(problem_package_id.clone(), relation.clone());
+                        }
                     }
                 }
             }
@@ -216,20 +220,22 @@ impl ModList {
     }
 }
 
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub enum ModdbType {
+    ModBuiltRules,
+    RuleFile(PathBuf),
+}
+
 #[derive(Default, Serialize, Deserialize)]
-pub struct ModRuleDb(pub HashMap<PackageId, ModRules>);
+pub struct ModRuleDb(pub IndexMap<ModdbType, HashMap<PackageId, ModRules>>);
 
 impl ModRuleDb {
-    pub fn from_toml(_path: &Path) -> Result<Self, anyhow::Error> {
-        todo!()
-    }
+    pub fn add_db(&mut self, path: &Path) -> Result<(), anyhow::Error> {
+        let db_text = String::from_utf8(fs::read(path)?)?;
+        let db = toml::from_str(&db_text)?;
 
-    pub fn merge(&mut self, other: Self) {
-        for (other_package_id, other_package_rules) in other.0 {
-            self.0
-                .entry(other_package_id)
-                .or_default()
-                .merge(other_package_rules);
-        }
+        self.0.insert(ModdbType::RuleFile(path.to_owned()), db);
+
+        Ok(())
     }
 }

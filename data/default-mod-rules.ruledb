@@ -1,0 +1,17 @@
+["ludeon.rimworld"]
+start_anchor = true
+
+["ludeon.rimworld.biotech"]
+start_anchor = true
+
+["ludeon.rimworld.ideology"]
+start_anchor = true
+
+["ludeon.rimworld.royalty"]
+start_anchor = true
+
+["brrainz.harmony"]
+start_anchor = true
+
+["unlimitedhugs.hugslib"]
+start_anchor = true

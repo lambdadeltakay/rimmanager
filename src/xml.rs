@@ -3,7 +3,7 @@ use std::fs;
 use std::hash::Hash;
 use std::path::{Path, PathBuf};
 
-use crate::managment::{ModRelation, ModRuleDb, PackageId};
+use crate::managment::{ModRelation, ModRuleDb, ModdbType, PackageId};
 use anyhow::Error;
 use homedir::get_my_home;
 use indexmap::IndexSet;
@@ -232,6 +232,8 @@ impl ModMetaData {
     ) {
         let data = &mut mod_rule_db
             .0
+            .entry(ModdbType::ModBuiltRules)
+            .or_default()
             .entry(self.package_id.clone())
             .or_default()
             .rules;
